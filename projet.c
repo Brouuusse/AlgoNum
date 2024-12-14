@@ -11,12 +11,88 @@ typedef struct {
     int nnz;            // Nombre de valeurs non nulles
 } SparseMatrix;
 
-typedef struct {
-    double *values;    // Valeurs non nulles
-    int *indexes;      // Indices des valeurs non nulles dans le vecteur
-    int nnz;           // Nombre de valeurs non nulles
-    int size;          // Taille totale du vecteur (utile pour référence)
-} SparseVector;
+void solveUpperTriangularCCS(SparseMatrix *U, SparseMatrix *b, SparseMatrix *x) {
+    // Initialisation du vecteur solution à 0
+    for (int i = 0; i < U->nCols; i++) {
+        x->values[i] = 0.0;
+    }
+
+    // Résolution colonne par colonne (triangulaire supérieur)
+    for (int col = U->nCols - 1; col >= 0; col--) {
+        // Chercher l'index où commence cette colonne
+        int startIdx = U->colPointers[col];
+        int endIdx = U->colPointers[col + 1];
+
+        // Trouver la valeur diagonale (doit exister dans une matrice triangulaire supérieure)
+        double diagValue = 0.0;
+        for (int idx = startIdx; idx < endIdx; idx++) {
+            if (U->rowIndexes[idx] == col) {
+                diagValue = U->values[idx];
+                break;
+            }
+        }
+
+        if (diagValue == 0.0) {
+            fprintf(stderr, "Erreur : la matrice est singulière (élément diagonal nul en colonne %d)\n", col);
+            exit(1);
+        }
+
+        // Calcul de x[col]
+        double sum = 0.0;
+        for (int idx = startIdx; idx < endIdx; idx++) {
+            int row = U->rowIndexes[idx];
+            if (row > col) {
+                sum += U->values[idx] * x->values[row];
+            }
+        }
+
+        // Rechercher si b contient une valeur pour cette ligne
+        double bValue = 0.0;
+        for (int i = 0; i < b->nnz; i++) {
+            if (b->rowIndexes[i] == col) {
+                bValue = b->values[i];
+                break;
+            }
+        }
+
+        x->values[col] = (bValue - sum) / diagValue;
+    }
+}
+
+void solveLowerTriangular(SparseMatrix A, SparseMatrix b, SparseMatrix *x) {
+    // Initialisation de la solution
+    double *sum = malloc(sizeof(double) * A.nCols);
+    for (int i = 0; i < A.nRows; i++) {
+        x->values[i] = 0.0;
+        sum[i] = 0.0;
+    }
+
+    // Résolution par substitution avant
+    for (int col = 0; col < A.nCols; col++) {
+
+        // Parcourir les éléments de la colonne courante
+        for (int i = A.colPointers[col]; i < A.colPointers[col + 1]; i++) {
+            int row = A.rowIndexes[i];
+
+            if (row > col) {
+                // Accumuler les contributions pour les termes précédents
+                sum[row] += A.values[i] * x->values[col];
+                printf("La ligne actuelle est %d et la colonne actuelle est %d \n", row, col);
+                printf("La somme de la ligne %d vaut : %lf et on est en train de lui ajouter la valeur %lf multipliee par x[%d] = %lf \n\n", row, sum[row], A.values[i], row, x->values[row]);
+            } else if (row == col) {
+                // Résoudre pour la diagonale
+                printf("La valeur du tableau de valeur est %lf, la valeur de b est %lf et la somme vaut %lf\n", A.values[i], b.values[col], sum[col]);
+                x->values[row] = (b.values[col] - sum[col]) / A.values[i];
+                printf("x[%d] = %lf \n\n", row, x->values[row]);
+            }
+        }
+    }
+    printf("Les solutions sont:\n");
+    for (int i = 0; i < A.nRows; i++){
+        printf("- x[%d] = %lf \n", i, x->values[i]);
+    }
+}
+
 
 int loadSparseMatrix(SparseMatrix *matrix, const char* sysMtx){
 
@@ -92,38 +168,37 @@ void freeSparseMatrix(SparseMatrix *matrix){
 
 }
 
-int loadSparseVector(SparseVector *vector, const char* bMtx, SparseMatrix *matrix){
+// int loadSparseVector(SparseVector *vector, const char* bMtx, SparseMatrix *matrix){
 
 
-    //Création du vecteur creux.
-    FILE *vctFile = fopen(bMtx, "r");
-    if (!vctFile) {
-        fprintf(stderr, "Erreur lors de l'ouverture du fichier %s\n", bMtx);
-        return 1;
-    }
-    //lecture de l'en-tête (j'ai ignoré la valeur du milieu parce que comme c'est un vecteur la colonne vaudra toujours 1 donc pas utile de la stocker)
-    fscanf(vctFile, "%d %*d %d", &vector->size, &vector->nnz);
-    vector->indexes = malloc(vector->nnz*sizeof(int));
-    vector->values = malloc(vector->nnz*sizeof(double));
+//     //Création du vecteur creux.
+//     FILE *vctFile = fopen(bMtx, "r");
+//     if (!vctFile) {
+//         fprintf(stderr, "Erreur lors de l'ouverture du fichier %s\n", bMtx);
+//         return 1;
+//     }
+//     //lecture de l'en-tête (j'ai ignoré la valeur du milieu parce que comme c'est un vecteur la colonne vaudra toujours 1 donc pas utile de la stocker)
+//     fscanf(vctFile, "%d %*d %d", &vector->size, &vector->nnz);
+//     vector->indexes = malloc(vector->nnz*sizeof(int));
+//     vector->values = malloc(vector->nnz*sizeof(double));
 
-    // je garnis les valeurs et les lignes associés à ses valeurs dans le tableau d'indice et le tableau de valeur de la structure vecteur
-    for (int i = 0; i < vector->nnz; i++){
-        //printf("Ah\n");
-        fscanf(vctFile, "%d %*d %lf", &vector->indexes[i], &vector->values[i]);
-    }
-    fclose(vctFile);
+//     // je garnis les valeurs et les lignes associés à ses valeurs dans le tableau d'indice et le tableau de valeur de la structure vecteur
+//     for (int i = 0; i < vector->nnz; i++){
+//         fscanf(vctFile, "%d %*d %lf", &vector->indexes[i], &vector->values[i]);
+//     }
+//     fclose(vctFile);
 
-    return 0;
+//     return 0;
 
-}
+// }
 
-void freeSparseVector(SparseVector *vector){
-    if(vector->indexes)
-        free(vector->indexes);
-    if(vector->values)
-        free(vector->values);
+// void freeSparseVector(SparseVector *vector){
+//     if(vector->indexes)
+//         free(vector->indexes);
+//     if(vector->values)
+//         free(vector->values);
 
-}
+// }
 
 
 int main(int argc, char **argv) {
@@ -140,8 +215,8 @@ int main(int argc, char **argv) {
     SparseMatrix A;
     loadSparseMatrix(&A, sysMtx);
     // Initialisation du vecteur
-    SparseVector b;
-    loadSparseVector(&b, bMtx, &A);
+    SparseMatrix b;
+    loadSparseMatrix(&b, bMtx);
 
     // Affichage pour vérifier si mon code est bon
     printf("Matrice au format CCS :\n");
@@ -153,11 +228,14 @@ int main(int argc, char **argv) {
     }
     printf("Vecteur\n");
     for(int i = 0; i < b.nnz; i++){
-        printf("Valeur : %lf, Ligne : %d\n", b.values[i], b.indexes[i]);
+        printf("Valeur : %lf, Ligne : %d\n", b.values[i], b.rowIndexes[i]);
     }
+    SparseMatrix x;
+    x.values = malloc(sizeof(double)*A.nRows);
+    solveLowerTriangular(A, b, &x);
 
     freeSparseMatrix(&A);
-    freeSparseVector(&b);
+    freeSparseMatrix(&b);
+    freeSparseMatrix(&x);
 
-    return 0;
 }
