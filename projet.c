@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 // Sructure des matrices creuses au format column compress
 typedef struct {
@@ -59,6 +60,24 @@ void solveUpperTriangularCCS(SparseMatrix *U, SparseMatrix *b, SparseMatrix *x) 
     }
 }
 
+bool isInRowIndexes(SparseMatrix m, int rowToSearch){
+    bool isInside = false;
+    for (int i = 0; i < m.nnz; i++){
+        if(m.rowIndexes[i]==rowToSearch){
+            isInside = true;
+        }
+    }
+    return isInside;
+}
+
+int matchedRow(SparseMatrix m, int rowToSearch){
+    int i =0;
+    while(i < m.nnz && m.rowIndexes[i]!=rowToSearch){
+        i++;
+    }
+    return i;
+}
+
 void solveLowerTriangular(SparseMatrix A, SparseMatrix b, SparseMatrix *x) {
     // Initialisation de la solution
     double *sum = malloc(sizeof(double) * A.nCols);
@@ -66,24 +85,33 @@ void solveLowerTriangular(SparseMatrix A, SparseMatrix b, SparseMatrix *x) {
         x->values[i] = 0.0;
         sum[i] = 0.0;
     }
-
+    int bRow;
+    // Le problème actuel c'est qu'on ne parcours pas b correctement. 
     // Résolution par substitution avant
     for (int col = 0; col < A.nCols; col++) {
-
         // Parcourir les éléments de la colonne courante
         for (int i = A.colPointers[col]; i < A.colPointers[col + 1]; i++) {
+            printf("Colonne %d \n", col);
             int row = A.rowIndexes[i];
-
+            printf("La ligne actuelle est %d et la colonne actuelle est %d et i vaut %d\n", row, col, i);
             if (row > col) {
                 // Accumuler les contributions pour les termes précédents
                 sum[row] += A.values[i] * x->values[col];
                 printf("La ligne actuelle est %d et la colonne actuelle est %d \n", row, col);
-                printf("La somme de la ligne %d vaut : %lf et on est en train de lui ajouter la valeur %lf multipliee par x[%d] = %lf \n\n", row, sum[row], A.values[i], row, x->values[row]);
+                printf("La somme de la ligne %d vaut : %lf et on est en train de lui ajouter la valeur %lf multipliee par x[%d] = %lf \n\n", row, sum[row], A.values[i], col, x->values[col]);
             } else if (row == col) {
                 // Résoudre pour la diagonale
-                printf("La valeur du tableau de valeur est %lf, la valeur de b est %lf et la somme vaut %lf\n", A.values[i], b.values[col], sum[col]);
-                x->values[row] = (b.values[col] - sum[col]) / A.values[i];
-                printf("x[%d] = %lf \n\n", row, x->values[row]);
+                if(isInRowIndexes(b, row)){
+                    bRow = matchedRow(b, row);
+                    printf("b vaut = %lf à la cellule %d\n", b.values[bRow], bRow);
+                    printf("La ligne actuelle est %d et la colonne actuelle est %d. La valeur du tableau de valeur est %lf, la valeur de b est %lf et la somme vaut %lf\n",row, col, A.values[i], b.values[bRow], sum[col]);
+                    x->values[row] = (b.values[bRow] - sum[col]) / A.values[i];
+                    printf("x[%d] = %lf \n\n", row, x->values[row]);
+                }else{
+                    printf("La valeur du tableau de valeur est %lf, b vaut 0 car l'indice de ligne de A (%d) et b (%d) ne match pas et la somme vaut %lf \n", A.values[i], A.rowIndexes[i], b.rowIndexes[i], sum[col]);
+                    x->values[row] = (0 - sum[col]) / A.values[i];
+                    printf("x[%d] = %lf \n\n", row, x->values[row]);
+                }
             }
         }
     }
@@ -91,6 +119,7 @@ void solveLowerTriangular(SparseMatrix A, SparseMatrix b, SparseMatrix *x) {
     for (int i = 0; i < A.nRows; i++){
         printf("- x[%d] = %lf \n", i, x->values[i]);
     }
+    free(sum);
 }
 
 
@@ -126,7 +155,8 @@ int loadSparseMatrix(SparseMatrix *matrix, const char* sysMtx){
     // de la matrice parce qu'il faut pouvoir les placer à la bonne cellule dans la tableau des indices trié par colonne (je sais c'est pas évident pose moi des questions)
     int *rowTmp = malloc(matrix->nnz * sizeof(int));
     int *colTmp = malloc(matrix->nnz * sizeof(int));
-    for (int i = 0; i < matrix->nnz; i++) {
+    int i = 0;
+    for (i = 0; i < matrix->nnz; i++) {
         fscanf(mtxFile, "%d %d %lf", &rowTmp[i], &colTmp[i], &matrix->values[i]);
         rowTmp[i]--; // Passer à un indexage 0
         colTmp[i]--;
@@ -139,6 +169,7 @@ int loadSparseMatrix(SparseMatrix *matrix, const char* sysMtx){
     for (int i = 0; i < matrix->nCols; i++) {
         matrix->colPointers[i + 1] = matrix->colPointers[i] + colCounts[i];
     }
+    // matrix->colPointers[matrix->nCols]++;
 
     // Remplir rowIndices en triant les valeurs par colonne 
     int *colOffsets = calloc(matrix->nCols, sizeof(int));
@@ -219,23 +250,24 @@ int main(int argc, char **argv) {
     loadSparseMatrix(&b, bMtx);
 
     // Affichage pour vérifier si mon code est bon
-    printf("Matrice au format CCS :\n");
+    printf("Matrice au format CCS de taile %dx%d:\n", A.nRows, A.nCols);
     for (int i = 0; i < A.nnz; i++) {
-        printf("Valeur : %lf, Ligne: %d\n", A.values[i], A.rowIndexes[i]);
+        printf("Valeur : %lf, Ligne: %d et i vaut %d \n", A.values[i], A.rowIndexes[i], i);
     }
     for (int i = 0; i <= A.nCols; i++) {
         printf("ColPointer[%d]: %d\n", i, A.colPointers[i]);
     }
-    printf("Vecteur\n");
+    printf("Vecteur de taille %dx%d\n", b.nRows, b.nCols);
     for(int i = 0; i < b.nnz; i++){
         printf("Valeur : %lf, Ligne : %d\n", b.values[i], b.rowIndexes[i]);
     }
     SparseMatrix x;
     x.values = malloc(sizeof(double)*A.nRows);
+    x.colPointers = malloc(sizeof(int) * A.nCols);
+    x.rowIndexes = malloc(sizeof(int) * A.nnz);
     solveLowerTriangular(A, b, &x);
 
     freeSparseMatrix(&A);
     freeSparseMatrix(&b);
     freeSparseMatrix(&x);
-
 }
