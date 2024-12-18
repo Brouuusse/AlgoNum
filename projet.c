@@ -195,7 +195,7 @@ void multiplyUx(SparseMatrix *U, double *x, double *Ux){
     }
 }
 
-void subtractbUx(double *b, double *Ux, int vectorLength, double *b_Ux){
+void substractbUx(double *b, double *Ux, int vectorLength, double *b_Ux){
     for(int i = 0; i < vectorLength; i++){
         b_Ux[i] = b[i] - Ux[i];
     }
@@ -211,6 +211,32 @@ void fromSparsetoDouble(SparseMatrix *matrix, double *vector){
     }
 }
 
+void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength){
+    matrix->nCols = 1;
+    matrix->nRows = vectorLength;
+    matrix->nnz = 0;
+    for(int i = 0; i < vectorLength; i++){
+        if(vector[i] != 0.0)
+            matrix->nnz++;    
+    }
+    matrix->values = malloc(matrix->nnz * sizeof(double));
+    if(matrix->values == NULL){
+        printf("Erreur allocation mémoire\n");
+        return 1;
+    }
+    matrix->rowIndexes = malloc(matrix->nnz * sizeof(int));
+    if(matrix->rowIndexes == NULL){
+        printf("Erreur allocation mémoire\n");
+        return 1;
+    }
+    matrix->colPointers = malloc((matrix->nCols + 1) * sizeof(int));
+    if(matrix->colPointers == NULL){
+        printf("Erreur allocation mémoire\n");
+        return 1;
+    }
+
+    //mettre à jour valeurs
+}
 
 
 int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
@@ -229,45 +255,81 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
         return 1;
     }
 
-    double *x;
+    double *x_curr = malloc(A->nRows * sizeof(double));
+    if(x_curr == NULL){
+        freeSparseMatrix(&L);
+        freeSparseMatrix(&U);
+        printf("Erreur allocation mémoire\n");
+        return 1;
+    }
     for(int i = 0; i < A->nRows; i++){
-        x[i] = 0.0; // on inititalise à zéro
+        x_curr[i] = 0.0; // on inititalise à zéro, ceci est x^0
     }
 
-    double *b_vector = malloc(A->nRows * sizeof(double));
+    double *b_vector = malloc(b->nRows * sizeof(double));
     if(b_vector == NULL){
         printf("Erreur allocation mémoire\n");
         freeSparseMatrix(&L);
         freeSparseMatrix(&U);
+        free(x_curr);
         return 1;
     }
     fromSparsetoDouble(b, b_vector);
 
-    double *Ux;
+    double *Ux = malloc(U->nRows * sizeof(double));
+    if(Ux == NULL){
+        printf("Erreur allocation mémoire\n");
+        freeSparseMatrix(&L);
+        freeSparseMatrix(&U);
+        free(x_curr);
+        free(b_vector);
+        return 1;
+    }
     for(int i = 0; i < U->nRows; i++){
         Ux[i] = 0.0; // on inititalise à zéro
     }
 
-    double *b_Ux;
+    double *b_Ux = malloc(U->nRows * sizeof(double));
+    if(b_Ux == NULL){
+        printf("Erreur allocation mémoire\n");
+        freeSparseMatrix(&L);
+        freeSparseMatrix(&U);
+        free(x_curr);
+        free(b_vector);
+        free(Ux);
+        return 1;
+    }
     for(int i = 0; i < U->nRows; i++){
-        x[i] = 0.0; // on inititalise à zéro
+        b_Ux[i] = 0.0; // on inititalise à zéro
     }
     //boucle tant que ça converge
     while(!convergence){
         //Calculer U * x^k
-        multiplyUx(U, x, Ux);
+        multiplyUx(U, x_curr, Ux);
         //Calculer b' = b - U *x^k
-        subtractbUx(&b, Ux, A->nRows, b_Ux);
-        //Remettre "vecteur" b' en "matrice creuse" -> manque fonction
+        substractbUx(b_vector, Ux, A->nRows, b_Ux);
+        //Remettre "vecteur" b' en "matrice creuse" -> fonction incomplète
+        SparseMatrix *b_prime; //il faut remplir cette matrice avec les données de b_vector
+        SparseMatrix *x_next_tmp; //matrice pour x^(k+1) A INITIALISER
         
         //Résoudre système L * x^(k+1) = b'
+        solveLowerTriangular(*A, *b_prime, x_next_tmp);
         
         //re-vérifier convergence pour voir si boucle recommence
             //convergence false if abs(x^(k+1) - x^k) < precision
+            //pour tout i : somme += abs(x_next[i] - x_curr[i] if somme < precision then false)
 
+
+        //pour tous les i, x_next devient x_curr pour le nouveau tour de boucle
     
     } 
 
+    freeSparseMatrix(&L);
+    freeSparseMatrix(&U);
+    free(x_curr);
+    free(b_vector);
+    free(Ux);
+    free(b_Ux);
 
 }
 
