@@ -122,30 +122,32 @@ void solveLowerTriangular(SparseMatrix A, SparseMatrix b, SparseMatrix *x) {
     free(sum);
 }
 
-SparseMatrix *extractLowerTriangularMtx(SparseMatrix *M, SparseMatrix *L){
+int extractTriangularMtx(SparseMatrix *M, SparseMatrix *U, bool Upper){
+    //Upper = true si on extrait la mat triang sup 
+    //      = false si on extraut la mat triang inf (avec diag)
     
-    L->nCols = M->nCols;
-    L->nRows = M->nCols;
-    L->nnz = 0;
-    L->values = malloc(M->nnz * sizeof(double));
-    if(L->values == NULL){
+    U->nCols = M->nCols;
+    U->nRows = M->nCols;
+    U->nnz = 0;
+    U->values = malloc(M->nnz * sizeof(double));
+    if(U->values == NULL){
         printf("Erreur allocation mémoire\n");
-        return NULL;
+        return 1;
     }
-    L->rowIndexes = malloc(M->nnz * sizeof(int));
-    if(L->rowIndexes == NULL){
+    U->rowIndexes = malloc(M->nnz * sizeof(int));
+    if(U->rowIndexes == NULL){
         printf("Erreur allocation mémoire\n");
-        return NULL;
+        return 1;
     }
-    L->colPointers = malloc((M->nCols + 1) * sizeof(int));
-    if(L->colPointers == NULL){
+    U->colPointers = malloc((M->nCols + 1) * sizeof(int));
+    if(U->colPointers == NULL){
         printf("Erreur allocation mémoire\n");
-        return NULL;
+        return 1;
     }
     //On met uniquement le premier pointeur à 0 parce que la liste des valeurs de la colonne 0 commence forcément à la cellule 0 de rowIndexes.
-    L->colPointers[0] = 0;
+    U->colPointers[0] = 0;
     //Je parcours chaque pointeur de colonne 
-    for(int col = 0; col < L->nCols; col++){
+    for(int col = 0; col < U->nCols; col++){
         //Je boucle sur les valeurs de cette colonne. 
         //Dès qu'on dépasse l'indice de cellule à partir duquel on change de colonne, on sort de la boucle pour passer à la colonne suivante.
         for (int i = M->colPointers[col]; i < M->colPointers[col+1]; i++){
@@ -153,42 +155,29 @@ SparseMatrix *extractLowerTriangularMtx(SparseMatrix *M, SparseMatrix *L){
             int row = M->rowIndexes[i];
             double value = M->values[i];
             //On ne veut garder dans notre matrice que ce qui se trouve sur la diagonale et en dessous donc row >= col
-            if(row >= col){
-                L->values[L->nnz] = value;
-                L->rowIndexes[L->nnz] = row;
-                L->nnz++;
+            //printf(" i %d, row %d, col %d, value %lf\n", i,row,col,value);
+            if(!Upper){
+                if(row >= col){
+                U->values[U->nnz] = value;
+                U->rowIndexes[U->nnz] = row;
+                U->nnz++;
+            }
+            }else{
+                if(row < col){
+                    U->values[U->nnz] = value;
+                    U->rowIndexes[U->nnz] = row;
+                    U->nnz++;
+                }
             }
         }
         //A chaque fin d'itération de valeurs d'une colonne, on met l'indice à partir duquel on compte les éléments dans la colonne suivante dans le pointeur suivant.
-        L->colPointers[col + 1] = L->nnz;
+        U->colPointers[col + 1] = U->nnz;
     }
     // Comme on a pas le même nombre de valeur non nulles que dans la matrice d'origine (vu qu'on garde que les valeurs sous la diag et la diag) on doit réallouer le nombre correcte de cellule.
-    L->values = realloc(L->values, L->nnz * sizeof(double));
-    L->rowIndexes = realloc(L->rowIndexes, L->nnz * sizeof(int));
+    U->values = realloc(U->values, U->nnz * sizeof(double));
+    U->rowIndexes = realloc(U->rowIndexes, U->nnz * sizeof(int));
 
-}
-
-SparseMatrix *extractUpperTriangularMtx(SparseMatrix *M, SparseMatrix *U){
-
-    U->nCols = M->nCols;
-    U->nRows = M->nCols;
-    U->values = malloc(M->nnz * sizeof(double));
-    if(U->values == NULL){
-        printf("Erreur allocation mémoire\n");
-        return NULL;
-    }
-    U->rowIndexes = malloc(M->nnz * sizeof(int));
-    if(U->rowIndexes == NULL){
-        printf("Erreur allocation mémoire\n");
-        return NULL;
-    }
-    U->colPointers = malloc((M->nCols + 1) * sizeof(int));
-    if(U->colPointers == NULL){
-        printf("Erreur allocation mémoire\n");
-        return NULL;
-    }
-
-    
+    return 0;
 
 }
 
@@ -229,12 +218,12 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
     bool convergence = false;
     //2) on crée nos matrices (L + D) et U et un vecteur x et b
     SparseMatrix *L;
-    if(extractLowerTriangularMtx(A, L)){
+    if(extractTriangularMtx(A, L, false)){
         printf("Erreur allocation mémoire\n");
         return 1;
     }
     SparseMatrix *U;
-    if(extractUpperTriangularMtx(A, U)){
+    if(extractTriangularMtx(A, U, true)){
         printf("Erreur allocation mémoire\n");
         freeSparseMatrix(&L);
         return 1;
@@ -254,16 +243,30 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
     }
     fromSparsetoDouble(b, b_vector);
 
+    double *Ux;
+    for(int i = 0; i < U->nRows; i++){
+        Ux[i] = 0.0; // on inititalise à zéro
+    }
+
+    double *b_Ux;
+    for(int i = 0; i < U->nRows; i++){
+        x[i] = 0.0; // on inititalise à zéro
+    }
     //boucle tant que ça converge
+    while(!convergence){
         //Calculer U * x^k
+        multiplyUx(U, x, Ux);
         //Calculer b' = b - U *x^k
-        //Remettre "vecteur" b' en "matrice creuse"
+        subtractbUx(&b, Ux, A->nRows, b_Ux);
+        //Remettre "vecteur" b' en "matrice creuse" -> manque fonction
+        
         //Résoudre système L * x^(k+1) = b'
+        
         //re-vérifier convergence pour voir si boucle recommence
             //convergence false if abs(x^(k+1) - x^k) < precision
 
     
-    
+    } 
 
 
 }
