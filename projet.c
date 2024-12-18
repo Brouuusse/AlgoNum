@@ -6,7 +6,7 @@
 typedef struct {
     double *values;     // tableaux des valeurs non nulles
     int *rowIndexes;    // tableaux des indices des lignes des valeurs non nulles triés par colonne
-    int *colPointers;   // Début de chaque dans le tableau rowIndexes
+    int *colPointers;   // Début de chaque colonne dans le tableau rowIndexes
     int nRows;          // Nombre de lignes dans la matrice
     int nCols;          // Nombre de colonnes dans la matrice
     int nnz;            // Nombre de valeurs non nulles
@@ -122,8 +122,139 @@ void solveLowerTriangular(SparseMatrix A, SparseMatrix b, SparseMatrix *x) {
     free(sum);
 }
 
+SparseMatrix *extractLowerTriangularMtx(SparseMatrix *M, SparseMatrix *L){
+    
+    L->nCols = M->nCols;
+    L->nRows = M->nCols;
+    L->nnz = 0;
+    L->values = malloc(M->nnz * sizeof(double));
+    if(L->values == NULL){
+        printf("Erreur allocation mémoire\n");
+        return NULL;
+    }
+    L->rowIndexes = malloc(M->nnz * sizeof(int));
+    if(L->rowIndexes == NULL){
+        printf("Erreur allocation mémoire\n");
+        return NULL;
+    }
+    L->colPointers = malloc((M->nCols + 1) * sizeof(int));
+    if(L->colPointers == NULL){
+        printf("Erreur allocation mémoire\n");
+        return NULL;
+    }
 
-int loadSparseMatrix(SparseMatrix *matrix, const char* sysMtx){
+    for(int i = 0; i < L->nCols; i++){
+        L->colPointers[i] = 0;
+    }
+
+    for(int i = 0; i < M->nCols){
+
+    }
+
+}
+
+SparseMatrix *extractUpperTriangularMtx(SparseMatrix *M, SparseMatrix *U){
+
+    U->nCols = M->nCols;
+    U->nRows = M->nCols;
+    U->values = malloc(M->nnz * sizeof(double));
+    if(U->values == NULL){
+        printf("Erreur allocation mémoire\n");
+        return NULL;
+    }
+    U->rowIndexes = malloc(M->nnz * sizeof(int));
+    if(U->rowIndexes == NULL){
+        printf("Erreur allocation mémoire\n");
+        return NULL;
+    }
+    U->colPointers = malloc((M->nCols + 1) * sizeof(int));
+    if(U->colPointers == NULL){
+        printf("Erreur allocation mémoire\n");
+        return NULL;
+    }
+
+    
+
+}
+
+void multiplyUx(SparseMatrix *U, double *x, double *Ux){
+    
+    for(int i = 0; i < U->nRows; i++){
+        Ux[i] = 0.0;
+    }
+
+    for (int col = 0; col < U->nCols; col++){
+        for(int idx = U->colPointers[col]; idx < U->colPointers[col + 1]; idx++){
+            int row = U->rowIndexes[idx];
+            Ux[row] += U->values[idx] * x[col]; 
+        }
+    }
+}
+
+void subtractbUx(double *b, double *Ux, int vectorLength, double *b_Ux){
+    for(int i = 0; i < vectorLength; i++){
+        b_Ux[i] = b[i] - Ux[i];
+    }
+}
+
+void fromSparsetoDouble(SparseMatrix *matrix, double *vector){
+    for(int i = 0; i < matrix->nRows; i++){
+        vector[i] = 0.0;
+    }
+
+    for(int i = 0; i < matrix->nnz; i++){
+        vector[matrix->rowIndexes[i]] = matrix->values[i];
+    }
+}
+
+
+
+int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
+    //1) vérifie convergence
+    bool convergence = false;
+    //2) on crée nos matrices (L + D) et U et un vecteur x et b
+    SparseMatrix *L;
+    if(extractLowerTriangularMtx(A, L)){
+        printf("Erreur allocation mémoire\n");
+        return 1;
+    }
+    SparseMatrix *U;
+    if(extractUpperTriangularMtx(A, U)){
+        printf("Erreur allocation mémoire\n");
+        freeSparseMatrix(&L);
+        return 1;
+    }
+
+    double *x;
+    for(int i = 0; i < A->nRows; i++){
+        x[i] = 0.0; // on inititalise à zéro
+    }
+
+    double *b_vector = malloc(A->nRows * sizeof(double));
+    if(b_vector == NULL){
+        printf("Erreur allocation mémoire\n");
+        freeSparseMatrix(&L);
+        freeSparseMatrix(&U);
+        return 1;
+    }
+    fromSparsetoDouble(b, b_vector);
+
+    //boucle tant que ça converge
+        //Calculer U * x^k
+        //Calculer b' = b - U *x^k
+        //Remettre "vecteur" b' en "matrice creuse"
+        //Résoudre système L * x^(k+1) = b'
+        //re-vérifier convergence pour voir si boucle recommence
+            //convergence false if abs(x^(k+1) - x^k) < precision
+
+    
+    
+
+
+}
+
+
+int loadSparseMatrix(SparseMatrix *matrix, const char *sysMtx){
 
     //Initialise matrice
     matrix->values = NULL;
@@ -198,6 +329,7 @@ void freeSparseMatrix(SparseMatrix *matrix){
         free(matrix->colPointers);
 
 }
+
 
 // int loadSparseVector(SparseVector *vector, const char* bMtx, SparseMatrix *matrix){
 
