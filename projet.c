@@ -12,53 +12,53 @@ typedef struct {
     int nnz;            // Nombre de valeurs non nulles
 } SparseMatrix;
 
-void solveUpperTriangularCCS(SparseMatrix *U, SparseMatrix *b, SparseMatrix *x) {
-    // Initialisation du vecteur solution à 0
-    for (int i = 0; i < U->nCols; i++) {
-        x->values[i] = 0.0;
-    }
+// void solveUpperTriangularCCS(SparseMatrix *U, SparseMatrix *b, SparseMatrix *x) {
+//     // Initialisation du vecteur solution à 0
+//     for (int i = 0; i < U->nCols; i++) {
+//         x->values[i] = 0.0;
+//     }
 
-    // Résolution colonne par colonne (triangulaire supérieur)
-    for (int col = U->nCols - 1; col >= 0; col--) {
-        // Chercher l'index où commence cette colonne
-        int startIdx = U->colPointers[col];
-        int endIdx = U->colPointers[col + 1];
+//     // Résolution colonne par colonne (triangulaire supérieur)
+//     for (int col = U->nCols - 1; col >= 0; col--) {
+//         // Chercher l'index où commence cette colonne
+//         int startIdx = U->colPointers[col];
+//         int endIdx = U->colPointers[col + 1];
 
-        // Trouver la valeur diagonale (doit exister dans une matrice triangulaire supérieure)
-        double diagValue = 0.0;
-        for (int idx = startIdx; idx < endIdx; idx++) {
-            if (U->rowIndexes[idx] == col) {
-                diagValue = U->values[idx];
-                break;
-            }
-        }
+//         // Trouver la valeur diagonale (doit exister dans une matrice triangulaire supérieure)
+//         double diagValue = 0.0;
+//         for (int idx = startIdx; idx < endIdx; idx++) {
+//             if (U->rowIndexes[idx] == col) {
+//                 diagValue = U->values[idx];
+//                 break;
+//             }
+//         }
 
-        if (diagValue == 0.0) {
-            fprintf(stderr, "Erreur : la matrice est singulière (élément diagonal nul en colonne %d)\n", col);
-            exit(1);
-        }
+//         if (diagValue == 0.0) {
+//             fprintf(stderr, "Erreur : la matrice est singulière (élément diagonal nul en colonne %d)\n", col);
+//             exit(1);
+//         }
 
-        // Calcul de x[col]
-        double sum = 0.0;
-        for (int idx = startIdx; idx < endIdx; idx++) {
-            int row = U->rowIndexes[idx];
-            if (row > col) {
-                sum += U->values[idx] * x->values[row];
-            }
-        }
+//         // Calcul de x[col]
+//         double sum = 0.0;
+//         for (int idx = startIdx; idx < endIdx; idx++) {
+//             int row = U->rowIndexes[idx];
+//             if (row > col) {
+//                 sum += U->values[idx] * x->values[row];
+//             }
+//         }
 
-        // Rechercher si b contient une valeur pour cette ligne
-        double bValue = 0.0;
-        for (int i = 0; i < b->nnz; i++) {
-            if (b->rowIndexes[i] == col) {
-                bValue = b->values[i];
-                break;
-            }
-        }
+//         // Rechercher si b contient une valeur pour cette ligne
+//         double bValue = 0.0;
+//         for (int i = 0; i < b->nnz; i++) {
+//             if (b->rowIndexes[i] == col) {
+//                 bValue = b->values[i];
+//                 break;
+//             }
+//         }
 
-        x->values[col] = (bValue - sum) / diagValue;
-    }
-}
+//         x->values[col] = (bValue - sum) / diagValue;
+//     }
+// }
 
 bool isInRowIndexes(SparseMatrix m, int rowToSearch){
     bool isInside = false;
@@ -142,14 +142,29 @@ SparseMatrix *extractLowerTriangularMtx(SparseMatrix *M, SparseMatrix *L){
         printf("Erreur allocation mémoire\n");
         return NULL;
     }
-
-    for(int i = 0; i < L->nCols; i++){
-        L->colPointers[i] = 0;
+    //On met uniquement le premier pointeur à 0 parce que la liste des valeurs de la colonne 0 commence forcément à la cellule 0 de rowIndexes.
+    L->colPointers[0] = 0;
+    //Je parcours chaque pointeur de colonne 
+    for(int col = 0; col < L->nCols; col++){
+        //Je boucle sur les valeurs de cette colonne. 
+        //Dès qu'on dépasse l'indice de cellule à partir duquel on change de colonne, on sort de la boucle pour passer à la colonne suivante.
+        for (int i = M->colPointers[col]; i < M->colPointers[col+1]; i++){
+            //La valeur contenu dans la cellule i de rowIndexes, c'est la ligne où se situe l'élément courant de la colonne qu'on est entrain de parcourir.
+            int row = M->rowIndexes[i];
+            double value = M->values[i];
+            //On ne veut garder dans notre matrice que ce qui se trouve sur la diagonale et en dessous donc row >= col
+            if(row >= col){
+                L->values[L->nnz] = value;
+                L->rowIndexes[L->nnz] = row;
+                L->nnz++;
+            }
+        }
+        //A chaque fin d'itération de valeurs d'une colonne, on met l'indice à partir duquel on compte les éléments dans la colonne suivante dans le pointeur suivant.
+        L->colPointers[col + 1] = L->nnz;
     }
-
-    for(int i = 0; i < M->nCols){
-
-    }
+    // Comme on a pas le même nombre de valeur non nulles que dans la matrice d'origine (vu qu'on garde que les valeurs sous la diag et la diag) on doit réallouer le nombre correcte de cellule.
+    L->values = realloc(L->values, L->nnz * sizeof(double));
+    L->rowIndexes = realloc(L->rowIndexes, L->nnz * sizeof(int));
 
 }
 
@@ -397,7 +412,7 @@ int main(int argc, char **argv) {
     x.values = malloc(sizeof(double)*A.nRows);
     x.colPointers = malloc(sizeof(int) * A.nCols);
     x.rowIndexes = malloc(sizeof(int) * A.nnz);
-    solveLowerTriangular(A, b, &x);
+    
 
     freeSparseMatrix(&A);
     freeSparseMatrix(&b);
