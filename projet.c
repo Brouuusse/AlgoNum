@@ -249,10 +249,23 @@ void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength) 
     matrix->colPointers[1] = matrix->nnz; 
 }
 
+bool converge(SparseMatrix *x_curr, SparseMatrix *x_next, double precision){
+    double *x_curr_vector = malloc(x_curr->nRows * sizeof(double));
+    double *x_next_vector = malloc(x_curr->nRows * sizeof(double));
+    fromSparsetoDouble(x_curr, x_curr_vector);
+    fromSparsetoDouble(x_next, x_next_vector);
+    double norm = 0.0;
+    for (int i = 0; i < x_curr->nRows; i++){
+        double diff = x_next_vector[i] - x_curr_vector[i];
+        norm += diff * diff;
+    }
 
+    norm = sqrt(norm);
+
+    return (norm<precision);
+}
 
 int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
-    //1) vérifie convergence
     bool convergence = false;
     //2) on crée nos matrices (L + D) et U et un vecteur x et b
     SparseMatrix *L;
@@ -327,6 +340,7 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
         //Résoudre système L * x^(k+1) = b'
         solveLowerTriangular(*A, *b_prime, x_next_tmp);
         
+        convergence = converge(x_curr, x_next_tmp, precision);
         //re-vérifier convergence pour voir si boucle recommence
             //convergence false if abs(x^(k+1) - x^k) < precision
             //pour tout i : somme += abs(x_next[i] - x_curr[i] if somme < precision then false)
