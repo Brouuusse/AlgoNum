@@ -344,7 +344,7 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
         SparseMatrix x_next_tmp;
         x_next_tmp.nRows = A->nRows;
         x_next_tmp.nCols = 1;
-        x_next_tmp.nnz = x_curr_mtx.nnz; // Supposons même nombre de valeurs non nulles
+        x_next_tmp.nnz = x_curr_mtx.nnz;
         x_next_tmp.values = malloc(x_next_tmp.nnz * sizeof(double));
         x_next_tmp.rowIndexes = malloc(x_next_tmp.nnz * sizeof(int));
         x_next_tmp.colPointers = malloc((x_next_tmp.nCols + 1) * sizeof(int));
@@ -353,7 +353,7 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
         solveLowerTriangular(*A, b_prime, &x_next_tmp);
 
         // Vérifier la convergence
-        convergence = converge(x_curr_mtx.values, x_next_tmp.values, A->nRows, precision);
+        convergence = converge(&x_curr_mtx, &x_next_tmp, precision);
 
         // Si convergence pas atteinte, mettre à jour x_curr avec x_next_tmp
         if (!convergence) {
