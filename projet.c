@@ -328,27 +328,59 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
         b_Ux[i] = 0.0; // on inititalise à zéro
     }
     //boucle tant que ça converge
-    while(!convergence){
-        //Calculer U * x^k
+    while (!convergence) {
+        // Calculer U * x^k
         multiplyUx(U, x_curr, Ux);
-        //Calculer b' = b - U *x^k
+
+        // Calculer b' = b - U * x^k
         substractbUx(b_vector, Ux, A->nRows, b_Ux);
-        //Remettre "vecteur" b' en "matrice creuse" -> fonction incomplète
-        SparseMatrix *b_prime; //il faut remplir cette matrice avec les données de b_vector
-        SparseMatrix *x_next_tmp; //matrice pour x^(k+1) A INITIALISER
-        
-        //Résoudre système L * x^(k+1) = b'
-        solveLowerTriangular(*A, *b_prime, x_next_tmp);
-        
-        convergence = converge(x_curr, x_next_tmp, precision);
-        //re-vérifier convergence pour voir si boucle recommence
-            //convergence false if abs(x^(k+1) - x^k) < precision
-            //pour tout i : somme += abs(x_next[i] - x_curr[i] if somme < precision then false)
 
+        // Remettre "vecteur" b' en "matrice creuse"
+        SparseMatrix b_prime;
+        fromDoubletoSparse(b_Ux, &b_prime, A->nRows);
+        SparseMatrix x_curr_mtx;
+        fromDoubletoSparse(x_curr, &x_curr_mtx, b_prime.nRows);
+        // Initialiser x_next_tmp
+        SparseMatrix x_next_tmp;
+        x_next_tmp.nRows = A->nRows;
+        x_next_tmp.nCols = 1;
+        x_next_tmp.nnz = x_curr_mtx.nnz; // Supposons même nombre de valeurs non nulles
+        x_next_tmp.values = malloc(x_next_tmp.nnz * sizeof(double));
+        x_next_tmp.rowIndexes = malloc(x_next_tmp.nnz * sizeof(int));
+        x_next_tmp.colPointers = malloc((x_next_tmp.nCols + 1) * sizeof(int));
 
-        //pour tous les i, x_next devient x_curr pour le nouveau tour de boucle
-    
-    } 
+        // Résoudre système L * x^(k+1) = b'
+        solveLowerTriangular(*A, b_prime, &x_next_tmp);
+
+        // Vérifier la convergence
+        convergence = converge(x_curr_mtx.values, x_next_tmp.values, A->nRows, precision);
+
+        // Si convergence pas atteinte, mettre à jour x_curr avec x_next_tmp
+        if (!convergence) {
+            // Libérer les données de x_curr pour éviter les fuites mémoire
+            free(x_curr_mtx.values);
+            free(x_curr_mtx.rowIndexes);
+            free(x_curr_mtx.colPointers);
+
+            // Copier les données de x_next_tmp dans x_curr
+            x_curr_mtx.values = malloc(x_next_tmp.nnz * sizeof(double));
+            x_curr_mtx.rowIndexes = malloc(x_next_tmp.nnz * sizeof(int));
+            x_curr_mtx.colPointers = malloc((x_next_tmp.nCols + 1) * sizeof(int));
+
+            memcpy(x_curr_mtx.values, x_next_tmp.values, x_next_tmp.nnz * sizeof(double));
+            memcpy(x_curr_mtx.rowIndexes, x_next_tmp.rowIndexes, x_next_tmp.nnz * sizeof(int));
+            memcpy(x_curr_mtx.colPointers, x_next_tmp.colPointers, (x_next_tmp.nCols + 1) * sizeof(int));
+        }
+
+        // Libérer les données de x_next_tmp pour éviter les fuites mémoire
+        free(x_next_tmp.values);
+        free(x_next_tmp.rowIndexes);
+        free(x_next_tmp.colPointers);
+
+        // Libérer b_prime pour éviter les fuites mémoire
+        freeSparseMatrix(&b_prime);
+    }
+
 
     freeSparseMatrix(&L);
     freeSparseMatrix(&U);
