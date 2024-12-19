@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
 
 // Sructure des matrices creuses au format column compress
 typedef struct {
@@ -59,6 +60,15 @@ typedef struct {
 //         x->values[col] = (bValue - sum) / diagValue;
 //     }
 // }
+void freeSparseMatrix(SparseMatrix *matrix){
+    if(matrix->values)
+        free(matrix->values);
+    if(matrix->rowIndexes)
+        free(matrix->rowIndexes);
+    if(matrix->colPointers)
+        free(matrix->colPointers);
+
+}
 
 bool isInRowIndexes(SparseMatrix m, int rowToSearch){
     bool isInside = false;
@@ -91,33 +101,33 @@ void solveLowerTriangular(SparseMatrix A, SparseMatrix b, SparseMatrix *x) {
     for (int col = 0; col < A.nCols; col++) {
         // Parcourir les éléments de la colonne courante
         for (int i = A.colPointers[col]; i < A.colPointers[col + 1]; i++) {
-            printf("Colonne %d \n", col);
+            //printf("Colonne %d \n", col);
             int row = A.rowIndexes[i];
-            printf("La ligne actuelle est %d et la colonne actuelle est %d et i vaut %d\n", row, col, i);
+            //printf("La ligne actuelle est %d et la colonne actuelle est %d et i vaut %d\n", row, col, i);
             if (row > col) {
                 // Accumuler les contributions pour les termes précédents
                 sum[row] += A.values[i] * x->values[col];
-                printf("La ligne actuelle est %d et la colonne actuelle est %d \n", row, col);
-                printf("La somme de la ligne %d vaut : %lf et on est en train de lui ajouter la valeur %lf multipliee par x[%d] = %lf \n\n", row, sum[row], A.values[i], col, x->values[col]);
+                //printf("La ligne actuelle est %d et la colonne actuelle est %d \n", row, col);
+                //printf("La somme de la ligne %d vaut : %lf et on est en train de lui ajouter la valeur %lf multipliee par x[%d] = %lf \n\n", row, sum[row], A.values[i], col, x->values[col]);
             } else if (row == col) {
                 // Résoudre pour la diagonale
                 if(isInRowIndexes(b, row)){
                     bRow = matchedRow(b, row);
-                    printf("b vaut = %lf à la cellule %d\n", b.values[bRow], bRow);
-                    printf("La ligne actuelle est %d et la colonne actuelle est %d. La valeur du tableau de valeur est %lf, la valeur de b est %lf et la somme vaut %lf\n",row, col, A.values[i], b.values[bRow], sum[col]);
+                    //printf("b vaut = %lf à la cellule %d\n", b.values[bRow], bRow);
+                    //printf("La ligne actuelle est %d et la colonne actuelle est %d. La valeur du tableau de valeur est %lf, la valeur de b est %lf et la somme vaut %lf\n",row, col, A.values[i], b.values[bRow], sum[col]);
                     x->values[row] = (b.values[bRow] - sum[col]) / A.values[i];
-                    printf("x[%d] = %lf \n\n", row, x->values[row]);
+                    //printf("x[%d] = %lf \n\n", row, x->values[row]);
                 }else{
-                    printf("La valeur du tableau de valeur est %lf, b vaut 0 car l'indice de ligne de A (%d) et b (%d) ne match pas et la somme vaut %lf \n", A.values[i], A.rowIndexes[i], b.rowIndexes[i], sum[col]);
+                    //printf("La valeur du tableau de valeur est %lf, b vaut 0 car l'indice de ligne de A (%d) et b (%d) ne match pas et la somme vaut %lf \n", A.values[i], A.rowIndexes[i], b.rowIndexes[i], sum[col]);
                     x->values[row] = (0 - sum[col]) / A.values[i];
-                    printf("x[%d] = %lf \n\n", row, x->values[row]);
+                    //printf("x[%d] = %lf \n\n", row, x->values[row]);
                 }
             }
         }
     }
     printf("Les solutions sont:\n");
     for (int i = 0; i < A.nRows; i++){
-        printf("- x[%d] = %lf \n", i, x->values[i]);
+        printf("- x[%d] = %.17lf \n", i, x->values[i]);
     }
     free(sum);
 }
@@ -125,7 +135,7 @@ void solveLowerTriangular(SparseMatrix A, SparseMatrix b, SparseMatrix *x) {
 int extractTriangularMtx(SparseMatrix *M, SparseMatrix *U, bool Upper){
     //Upper = true si on extrait la mat triang sup 
     //      = false si on extraut la mat triang inf (avec diag)
-    
+    //printf("est rentré ds extr\n");
     U->nCols = M->nCols;
     U->nRows = M->nCols;
     U->nnz = 0;
@@ -144,6 +154,7 @@ int extractTriangularMtx(SparseMatrix *M, SparseMatrix *U, bool Upper){
         printf("Erreur allocation mémoire\n");
         return 1;
     }
+    //printf("avant boucle extract\n");
     //On met uniquement le premier pointeur à 0 parce que la liste des valeurs de la colonne 0 commence forcément à la cellule 0 de rowIndexes.
     U->colPointers[0] = 0;
     //Je parcours chaque pointeur de colonne 
@@ -212,9 +223,16 @@ void fromSparsetoDouble(SparseMatrix *matrix, double *vector){
 }
 
 void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength) {
+
+    int count = 0;
+    for(int i = 0; i < vectorLength; i++){
+        if(vector[i] != 0.0){
+            count++;
+        }
+    }
     matrix->nCols = 1;
     matrix->nRows = vectorLength;
-    matrix->nnz = 0;
+    matrix->nnz = count;
 
     matrix->values = malloc(matrix->nnz * sizeof(double));
     if (matrix->values == NULL) {
@@ -235,11 +253,12 @@ void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength) 
         return;
     }
     // on parcours le vecteur en incrémentant au fur et à mesure le nombre de valeurs non nulles et en garnissant le tableau valeur et rowIndexes
+    int idx = 0;
     for (int i = 0; i < vectorLength; i++) {
         if (vector[i] != 0.0) {
-            matrix->values[matrix->nnz] = vector[i];
-            matrix->rowIndexes[matrix->nnz] = i;
-            matrix->nnz++;
+            matrix->values[idx] = vector[i];
+            matrix->rowIndexes[idx] = i;
+            idx++;
         }
     }
 
@@ -249,37 +268,40 @@ void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength) 
     matrix->colPointers[1] = matrix->nnz; 
 }
 
-bool converge(SparseMatrix *x_curr, SparseMatrix *x_next, double precision){
-    double *x_curr_vector = malloc(x_curr->nRows * sizeof(double));
-    double *x_next_vector = malloc(x_curr->nRows * sizeof(double));
-    fromSparsetoDouble(x_curr, x_curr_vector);
-    fromSparsetoDouble(x_next, x_next_vector);
+bool converge(double *x_curr, double *x_next, double precision, int vectorLength){
     double norm = 0.0;
-    for (int i = 0; i < x_curr->nRows; i++){
-        double diff = x_next_vector[i] - x_curr_vector[i];
+    for (int i = 0; i < vectorLength; i++){
+        double diff = x_next[i] - x_curr[i];
         norm += diff * diff;
     }
 
     norm = sqrt(norm);
 
+    if(norm > 200){
+        //stopper si converge pas
+        //ne pas print les sol dans un fichier si on passe par ici parce converge pas
+        return true;
+    }
+
     return (norm<precision);
 }
 
 int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
-    bool convergence = false;
+    //printf("est rentré dans res\n");
+    bool hasConverged = false;
     //2) on crée nos matrices (L + D) et U et un vecteur x et b
-    SparseMatrix *L;
-    if(extractTriangularMtx(A, L, false)){
+    SparseMatrix L;
+    if(extractTriangularMtx(A, &L, false)){
         printf("Erreur allocation mémoire\n");
         return 1;
     }
-    SparseMatrix *U;
-    if(extractTriangularMtx(A, U, true)){
+    SparseMatrix U;
+    if(extractTriangularMtx(A, &U, true)){
         printf("Erreur allocation mémoire\n");
         freeSparseMatrix(&L);
         return 1;
     }
-
+    //printf("a fini extrait\n");
     double *x_curr = malloc(A->nRows * sizeof(double));
     if(x_curr == NULL){
         freeSparseMatrix(&L);
@@ -301,7 +323,7 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
     }
     fromSparsetoDouble(b, b_vector);
 
-    double *Ux = malloc(U->nRows * sizeof(double));
+    double *Ux = malloc(U.nRows * sizeof(double));
     if(Ux == NULL){
         printf("Erreur allocation mémoire\n");
         freeSparseMatrix(&L);
@@ -310,11 +332,11 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
         free(b_vector);
         return 1;
     }
-    for(int i = 0; i < U->nRows; i++){
+    for(int i = 0; i < U.nRows; i++){
         Ux[i] = 0.0; // on inititalise à zéro
     }
 
-    double *b_Ux = malloc(U->nRows * sizeof(double));
+    double *b_Ux = malloc(U.nRows * sizeof(double));
     if(b_Ux == NULL){
         printf("Erreur allocation mémoire\n");
         freeSparseMatrix(&L);
@@ -324,13 +346,14 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
         free(Ux);
         return 1;
     }
-    for(int i = 0; i < U->nRows; i++){
+    for(int i = 0; i < U.nRows; i++){
         b_Ux[i] = 0.0; // on inititalise à zéro
     }
-    //boucle tant que ça converge
-    while (!convergence) {
+    //boucle tant que ça converge pas
+    while (!hasConverged) {
+        //printf("est rentré boucle conv\n");
         // Calculer U * x^k
-        multiplyUx(U, x_curr, Ux);
+        multiplyUx(&U, x_curr, Ux);
 
         // Calculer b' = b - U * x^k
         substractbUx(b_vector, Ux, A->nRows, b_Ux);
@@ -338,47 +361,57 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
         // Remettre "vecteur" b' en "matrice creuse"
         SparseMatrix b_prime;
         fromDoubletoSparse(b_Ux, &b_prime, A->nRows);
-        SparseMatrix x_curr_mtx;
-        fromDoubletoSparse(x_curr, &x_curr_mtx, b_prime.nRows);
         // Initialiser x_next_tmp
         SparseMatrix x_next_tmp;
         x_next_tmp.nRows = A->nRows;
         x_next_tmp.nCols = 1;
-        x_next_tmp.nnz = x_curr_mtx.nnz;
-        x_next_tmp.values = malloc(x_next_tmp.nnz * sizeof(double));
-        x_next_tmp.rowIndexes = malloc(x_next_tmp.nnz * sizeof(int));
+        x_next_tmp.nnz = 0; //
+        x_next_tmp.values = malloc(A->nRows * sizeof(double));
+        x_next_tmp.rowIndexes = malloc(A->nRows * sizeof(int));
         x_next_tmp.colPointers = malloc((x_next_tmp.nCols + 1) * sizeof(int));
 
         // Résoudre système L * x^(k+1) = b'
-        solveLowerTriangular(*A, b_prime, &x_next_tmp);
+        solveLowerTriangular(L, b_prime, &x_next_tmp);
+
+        //actualisez donnée de matrice x_next_tmp
+        x_next_tmp.nnz = A->nRows;
+        for(int i = 0; i < A->nRows; i++){
+            x_next_tmp.rowIndexes[i] = i;
+        }
+        x_next_tmp.colPointers[0] = 0;
+        x_next_tmp.colPointers[1] = A->nRows;
+
+        double *x_next = malloc(A->nRows * sizeof(double));
+        if(x_next == NULL){
+            printf("Erreur allocation mémoire\n");
+            freeSparseMatrix(&L);
+            freeSparseMatrix(&U);
+            freeSparseMatrix(&b_prime);
+            freeSparseMatrix(&x_next_tmp);
+            free(x_curr);
+            free(b_vector);
+            free(Ux);
+            return 1;
+        } 
+        for(int i = 0; i < A->nRows; i++){
+            x_next[i] = 0.0;
+        }
+        fromSparsetoDouble(&x_next_tmp, x_next);
 
         // Vérifier la convergence
-        convergence = converge(&x_curr_mtx, &x_next_tmp, precision);
+        hasConverged = converge(x_curr, x_next, precision, A->nRows);
 
         // Si convergence pas atteinte, mettre à jour x_curr avec x_next_tmp
-        if (!convergence) {
-            // Libérer les données de x_curr pour éviter les fuites mémoire
-            free(x_curr_mtx.values);
-            free(x_curr_mtx.rowIndexes);
-            free(x_curr_mtx.colPointers);
-
-            // Copier les données de x_next_tmp dans x_curr
-            x_curr_mtx.values = malloc(x_next_tmp.nnz * sizeof(double));
-            x_curr_mtx.rowIndexes = malloc(x_next_tmp.nnz * sizeof(int));
-            x_curr_mtx.colPointers = malloc((x_next_tmp.nCols + 1) * sizeof(int));
-
-            memcpy(x_curr_mtx.values, x_next_tmp.values, x_next_tmp.nnz * sizeof(double));
-            memcpy(x_curr_mtx.rowIndexes, x_next_tmp.rowIndexes, x_next_tmp.nnz * sizeof(int));
-            memcpy(x_curr_mtx.colPointers, x_next_tmp.colPointers, (x_next_tmp.nCols + 1) * sizeof(int));
+        if (!hasConverged) {
+           for(int i = 0; i < A->nRows; i++){
+            x_curr[i] = x_next[i];
+           }
         }
-
-        // Libérer les données de x_next_tmp pour éviter les fuites mémoire
-        free(x_next_tmp.values);
-        free(x_next_tmp.rowIndexes);
-        free(x_next_tmp.colPointers);
 
         // Libérer b_prime pour éviter les fuites mémoire
         freeSparseMatrix(&b_prime);
+        freeSparseMatrix(&x_next_tmp);
+        free(x_next);
     }
 
 
@@ -388,6 +421,8 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
     free(b_vector);
     free(Ux);
     free(b_Ux);
+
+    return 0;
 
 }
 
@@ -458,16 +493,6 @@ int loadSparseMatrix(SparseMatrix *matrix, const char *sysMtx){
 
 }
 
-void freeSparseMatrix(SparseMatrix *matrix){
-    if(matrix->values)
-        free(matrix->values);
-    if(matrix->rowIndexes)
-        free(matrix->rowIndexes);
-    if(matrix->colPointers)
-        free(matrix->colPointers);
-
-}
-
 
 // int loadSparseVector(SparseVector *vector, const char* bMtx, SparseMatrix *matrix){
 
@@ -519,7 +544,7 @@ int main(int argc, char **argv) {
     SparseMatrix b;
     loadSparseMatrix(&b, bMtx);
 
-    // Affichage pour vérifier si mon code est bon
+    /* // Affichage pour vérifier si mon code est bon
     printf("Matrice au format CCS de taile %dx%d:\n", A.nRows, A.nCols);
     for (int i = 0; i < A.nnz; i++) {
         printf("Valeur : %lf, Ligne: %d et i vaut %d \n", A.values[i], A.rowIndexes[i], i);
@@ -530,11 +555,13 @@ int main(int argc, char **argv) {
     printf("Vecteur de taille %dx%d\n", b.nRows, b.nCols);
     for(int i = 0; i < b.nnz; i++){
         printf("Valeur : %lf, Ligne : %d\n", b.values[i], b.rowIndexes[i]);
-    }
+    } */
     SparseMatrix x;
     x.values = malloc(sizeof(double)*A.nRows);
     x.colPointers = malloc(sizeof(int) * A.nCols);
     x.rowIndexes = malloc(sizeof(int) * A.nnz);
+
+    resolutionGS(&A, &b, precision);
     
 
     freeSparseMatrix(&A);
