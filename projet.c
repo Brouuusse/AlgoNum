@@ -211,32 +211,44 @@ void fromSparsetoDouble(SparseMatrix *matrix, double *vector){
     }
 }
 
-void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength){
+void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength) {
     matrix->nCols = 1;
     matrix->nRows = vectorLength;
     matrix->nnz = 0;
-    for(int i = 0; i < vectorLength; i++){
-        if(vector[i] != 0.0)
-            matrix->nnz++;    
-    }
+
     matrix->values = malloc(matrix->nnz * sizeof(double));
-    if(matrix->values == NULL){
-        printf("Erreur allocation mémoire\n");
-        return 1;
+    if (matrix->values == NULL) {
+        printf("Erreur allocation mémoire pour les valeurs\n");
+        return;
     }
     matrix->rowIndexes = malloc(matrix->nnz * sizeof(int));
-    if(matrix->rowIndexes == NULL){
-        printf("Erreur allocation mémoire\n");
-        return 1;
+    if (matrix->rowIndexes == NULL) {
+        printf("Erreur allocation mémoire pour les indices de ligne\n");
+        free(matrix->values);
+        return;
     }
     matrix->colPointers = malloc((matrix->nCols + 1) * sizeof(int));
-    if(matrix->colPointers == NULL){
-        printf("Erreur allocation mémoire\n");
-        return 1;
+    if (matrix->colPointers == NULL) {
+        printf("Erreur allocation mémoire pour les pointeurs de colonne\n");
+        free(matrix->values);
+        free(matrix->rowIndexes);
+        return;
+    }
+    // on parcours le vecteur en incrémentant au fur et à mesure le nombre de valeurs non nulles et en garnissant le tableau valeur et rowIndexes
+    for (int i = 0; i < vectorLength; i++) {
+        if (vector[i] != 0.0) {
+            matrix->values[matrix->nnz] = vector[i];
+            matrix->rowIndexes[matrix->nnz] = i;
+            matrix->nnz++;
+        }
     }
 
-    //mettre à jour valeurs
+    // La première colonne commence à l'indice 0
+    matrix->colPointers[0] = 0;
+    // Une seule colonne contient tous les éléments non nuls
+    matrix->colPointers[1] = matrix->nnz; 
 }
+
 
 
 int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision){
