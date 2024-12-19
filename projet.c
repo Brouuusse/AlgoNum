@@ -145,7 +145,7 @@ int extractTriangularMtx(SparseMatrix *M, SparseMatrix *U, bool Upper) {
         return 1;
     }
 
-    return 0; // Succès
+    return 0;
 }
 
 void multiplyUx(SparseMatrix *U, double *x, double *Ux) {
@@ -154,7 +154,7 @@ void multiplyUx(SparseMatrix *U, double *x, double *Ux) {
 
     // Effectuer la multiplication
     for (int col = 0; col < U->nCols; col++) {
-        double x_col = x[col];  // Précharger x[col] pour éviter un accès redondant
+        double x_col = x[col];
         for (int idx = U->colPointers[col]; idx < U->colPointers[col + 1]; idx++) {
             int row = U->rowIndexes[idx];
             Ux[row] += U->values[idx] * x_col;
@@ -195,7 +195,7 @@ void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength) 
     // Allocation mémoire pour les valeurs, indices de lignes et pointeurs de colonnes
     matrix->values = malloc(nnz * sizeof(double));
     matrix->rowIndexes = malloc(nnz * sizeof(int));
-    matrix->colPointers = malloc(2 * sizeof(int)); // Toujours deux pointeurs pour une seule colonne
+    matrix->colPointers = malloc(2 * sizeof(int));
 
     // Vérification d'allocation
     if (!matrix->values || !matrix->rowIndexes || !matrix->colPointers) {
@@ -217,7 +217,7 @@ void fromDoubletoSparse(double *vector, SparseMatrix *matrix, int vectorLength) 
 
     // Étape 3 : Remplir les pointeurs de colonnes
     matrix->colPointers[0] = 0;
-    matrix->colPointers[1] = nnz; // Tous les éléments non nuls sont dans la première (et unique) colonne
+    matrix->colPointers[1] = nnz;
 }
 
 bool converge(double *x_curr, double *x_next, double precision, int vectorLength) {
@@ -229,7 +229,7 @@ bool converge(double *x_curr, double *x_next, double precision, int vectorLength
         squaredNorm += diff * diff;
         // Arrêt anticipé si la norme dépasse le seuil de non-convergence (200^2)
         if (squaredNorm > 40000.0) { 
-            return true; // Indique que l'algorithme doit s'arrêter
+            return true;
         }
     }
 
@@ -273,7 +273,7 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision) {
         freeSparseMatrix(&U);
         return 1;
     }
-    memset(x_curr, 0, A->nRows * sizeof(double)); // Initialisation à zéro
+    memset(x_curr, 0, A->nRows * sizeof(double)); 
 
     double *b_vector = malloc(b->nRows * sizeof(double));
     if (!b_vector) {
@@ -349,7 +349,7 @@ int resolutionGS(SparseMatrix *A, SparseMatrix *b, double precision) {
         // Mise à jour de x_curr et vérification de la convergence
         double *x_next = x_next_tmp.values;
         hasConverged = converge(x_curr, x_next, precision, A->nRows);
-        memcpy(x_curr, x_next, A->nRows * sizeof(double)); // Copie des résultats
+        memcpy(x_curr, x_next, A->nRows * sizeof(double));
     }
 
     // Sauvegarde de la solution finale
@@ -397,20 +397,17 @@ int loadSparseMatrix(SparseMatrix *matrix, const char *sysMtx){
     int i = 0;
     for (i = 0; i < matrix->nnz; i++) {
         fscanf(mtxFile, "%d %d %lf", &rowTmp[i], &colTmp[i], &matrix->values[i]);
-        rowTmp[i]--; // Passer à un indexage 0
+        rowTmp[i]--;
         colTmp[i]--;
         colCounts[colTmp[i]]++;
     }
     fclose(mtxFile);
 
-    // Ici on veut que le pointeur vers les colonnes indique ou commence chaque colonne dans le tableau rowIndices
     matrix->colPointers[0] = 0;
     for (int i = 0; i < matrix->nCols; i++) {
         matrix->colPointers[i + 1] = matrix->colPointers[i] + colCounts[i];
     }
-    // matrix->colPointers[matrix->nCols]++;
 
-    // Remplir rowIndices en triant les valeurs par colonne 
     int *colOffsets = calloc(matrix->nCols, sizeof(int));
     for (int i = 0; i < matrix->nnz; i++) {
         int col = colTmp[i];
@@ -433,7 +430,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Usage: %s <inputMatrix.mtx> <inputRhs.mtx> <precision>\n", argv[0]);
         return 1;
     }
-
+    int result;
     const char *sysMtx = argv[1];
     const char *bMtx = argv[2];
     double precision = atof(argv[3]);
@@ -445,27 +442,14 @@ int main(int argc, char **argv) {
     SparseMatrix b;
     loadSparseMatrix(&b, bMtx);
 
-    /* // Affichage pour vérifier si mon code est bon
-    printf("Matrice au format CCS de taile %dx%d:\n", A.nRows, A.nCols);
-    for (int i = 0; i < A.nnz; i++) {
-        printf("Valeur : %lf, Ligne: %d et i vaut %d \n", A.values[i], A.rowIndexes[i], i);
-    }
-    for (int i = 0; i <= A.nCols; i++) {
-        printf("ColPointer[%d]: %d\n", i, A.colPointers[i]);
-    }
-    printf("Vecteur de taille %dx%d\n", b.nRows, b.nCols);
-    for(int i = 0; i < b.nnz; i++){
-        printf("Valeur : %lf, Ligne : %d\n", b.values[i], b.rowIndexes[i]);
-    } */
     SparseMatrix x;
     x.values = malloc(sizeof(double)*A.nRows);
     x.colPointers = malloc(sizeof(int) * A.nCols);
     x.rowIndexes = malloc(sizeof(int) * A.nnz);
 
-    resolutionGS(&A, &b, precision);
-    
-
+    result = resolutionGS(&A, &b, precision);
     freeSparseMatrix(&A);
     freeSparseMatrix(&b);
     freeSparseMatrix(&x);
+    return result;
 }
